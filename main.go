@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"io"
 	"io/ioutil"
@@ -17,6 +18,8 @@ var (
 	input  = flag.String("input", "", "input Dockerfile, required")
 	output = flag.String("output", "-", "output Dockerfile. Default to stdout.")
 
+	versionPlaceholder = flag.String("version_placeholder", "VERSION", "Additionally replace this with actual caddy version.")
+
 	caddyVersionRE = regexp.MustCompile(`caddy:(\d\.\d\.\d)`)
 )
 
@@ -28,7 +31,7 @@ func main() {
 		glog.Fatalf("Read input file failed, err: %v", err)
 	}
 
-	Output(replaceVersions(b))
+	Output(replaceVersions(b, *versionPlaceholder))
 }
 
 func Output(b []byte) {
@@ -62,11 +65,11 @@ func prepareFile() (io.WriteCloser, error) {
 	return os.Open(*output)
 }
 
-func replaceVersions(in []byte) []byte {
+func replaceVersions(in []byte, placeholder string) []byte {
 	var versions []string
 
-	for _, m := range caddyVersionRE.FindAll(in, -1) {
-		versions = append(versions, string(m))
+	for _, m := range caddyVersionRE.FindAllSubmatch(in, -1) {
+		versions = append(versions, string(m[1]))
 	}
 
 	glog.Infof("All available versions: \n%v", strings.Join(versions, "\n"))
@@ -79,5 +82,8 @@ func replaceVersions(in []byte) []byte {
 	sort.Strings(versions)
 	biggest := versions[len(versions)-1]
 
-	return caddyVersionRE.ReplaceAll(in, []byte(biggest))
+	return bytes.ReplaceAll(
+		caddyVersionRE.ReplaceAll(in, []byte("caddy:"+biggest)),
+		[]byte(placeholder), []byte(biggest))
+
 }
