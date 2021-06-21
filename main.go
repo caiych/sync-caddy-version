@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -15,8 +16,9 @@ import (
 )
 
 var (
-	input  = flag.String("input", "", "input Dockerfile, required")
-	output = flag.String("output", "-", "output Dockerfile. Default to stdout.")
+	input                     = flag.String("input", "", "input Dockerfile, required")
+	output                    = flag.String("output", "-", "output Dockerfile. Default to stdout.")
+	outputUsedVersionToStdOut = flag.Bool("output_used_version_to_stdout", false, "Output used version to stdout. Isn't compatible with --output=-")
 
 	versionPlaceholder = flag.String("version_placeholder", "VERSION", "Additionally replace this with actual caddy version.")
 
@@ -26,6 +28,10 @@ var (
 func main() {
 	flag.Parse()
 
+	if *outputUsedVersionToStdOut && *output == "-" {
+		glog.Fatal("--output_used_version_to_stdout can't be set when --output=-: stdout will be jammed.")
+	}
+
 	b, err := ioutil.ReadFile(*input)
 	if err != nil {
 		glog.Fatalf("Read input file failed, err: %v", err)
@@ -34,7 +40,7 @@ func main() {
 	Output(replaceVersions(b, *versionPlaceholder))
 }
 
-func Output(b []byte) {
+func Output(b []byte, version string) {
 	var w io.WriteCloser
 	if *output == "-" {
 		w = os.Stdout
@@ -49,6 +55,7 @@ func Output(b []byte) {
 	if _, err := w.Write(b); err != nil {
 		glog.Fatalf("Failed to write, err: %v", err)
 	}
+	fmt.Println(version)
 }
 
 func prepareFile() (io.WriteCloser, error) {
@@ -65,7 +72,7 @@ func prepareFile() (io.WriteCloser, error) {
 	return os.Open(*output)
 }
 
-func replaceVersions(in []byte, placeholder string) []byte {
+func replaceVersions(in []byte, placeholder string) ([]byte, string) {
 	var versions []string
 
 	for _, m := range caddyVersionRE.FindAllSubmatch(in, -1) {
@@ -76,7 +83,7 @@ func replaceVersions(in []byte, placeholder string) []byte {
 
 	if len(versions) == 0 {
 		glog.Info("No caddy versions found, do nothing.")
-		return in
+		return in, ""
 	}
 
 	sort.Strings(versions)
@@ -84,6 +91,6 @@ func replaceVersions(in []byte, placeholder string) []byte {
 
 	return bytes.ReplaceAll(
 		caddyVersionRE.ReplaceAll(in, []byte("caddy:"+biggest)),
-		[]byte(placeholder), []byte(biggest))
+		[]byte(placeholder), []byte(biggest)), biggest
 
 }

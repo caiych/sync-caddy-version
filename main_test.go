@@ -131,7 +131,7 @@ COPY --from=builder /usr/bin/caddy /usr/bin/caddy`),
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := replaceVersions(tt.args.in, tt.args.placeholder)
+			got, _ := replaceVersions(tt.args.in, tt.args.placeholder)
 			if diff := cmp.Diff(string(tt.want), string(got)); diff != "" {
 				t.Errorf("replaceVersions() returns expected result, (-want +got):\n%s", diff)
 			}
